@@ -1,0 +1,22 @@
+{
+  "name": "trials_backend_nodejs",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "json2csv": "^6.0.0-alpha.2",
+    "multiparty": "^4.2.3",
+    "mysql2": "^3.11.3",
+    "nodemon": "^3.1.7",
+    "xlsx": "^0.18.5"
+  }
+}
