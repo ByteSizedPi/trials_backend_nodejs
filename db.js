@@ -7,7 +7,7 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   waitForConnections: true,
-  connectionLimit: 5,
+  connectionLimit: 10,
   queueLimit: 0,
 });
 
@@ -21,6 +21,25 @@ console.log(
   process.env.DB_NAME,
   "\n"
 );
+
+// async function executeTransaction(queries = []) {
+//   const connection = await pool.getConnection();
+
+//   try {
+//     await connection.beginTransaction();
+
+//     for (const [query, params = []] of queries) {
+//       await connection.execute(query, params);
+//     }
+
+//     await connection.commit();
+//   } catch (e) {
+//     await connection.rollback();
+//     throw e;
+//   } finally {
+//     connection.release();
+//   }
+// }
 
 // Function to execute a query
 async function executeQuery(query, params = [], jsonformat = true) {
@@ -75,7 +94,7 @@ const QUERIES = {
     JOIN Sections s on e.id = s.event_id
     WHERE completed = 1
     GROUP BY e.id, e.date_created, e.name, e.event_date, e.location, e.lap_count, e.completed
-    ORDER BY e.event_date ASC;
+    ORDER BY e.event_date DESC;
   `),
   COMPLETE_EVENT: (event_id) =>
     insertQuery(
