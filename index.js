@@ -237,7 +237,7 @@ router.delete("/event/:event_id", async ({ params: { event_id } }, res) => {
 router.get(
   "/event/:event_id/validate/:password",
   async ({ params: { event_id, password } }, res) => {
-    res.json(!!(await QUERIES.VERIFY_EVENT_PASSWORD(event_id, password)));
+    res.json(!!(await QUERIES.VERIFY_EVENT_PASSWORD(event_id, password))[0]);
   }
 );
 
