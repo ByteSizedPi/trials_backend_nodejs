@@ -73,19 +73,92 @@ router.get("/results_summary/:event_id", async (req, res) => {
   res.json(await QUERIES.GET_SCORES_SUMMARY_BY_EVENTID(req.params.event_id));
 });
 
+function relationalRowsToNested(scoresRelational, lap_count, section_count) {
+  const sections = Array.from({ length: section_count }, (_, i) => i + 1);
+
+  return scoresRelational.map(
+    ({ JSON_scores, rider_number, rider_name, class_name }) => {
+      // parse json
+      const scores = JSON.parse(JSON_scores);
+
+      // create mapping
+      const filledSections = sections.reduce((acc, section) => {
+        const score = scores[section] ?? [];
+
+        // construct filledScore
+        const filledScore = [
+          ...score,
+          ...Array(lap_count - score.length).fill(10),
+        ];
+
+        // add total field to scores
+        return acc.concat(
+          filledScore,
+          filledScore.reduce((prev, cur) => prev + cur, 0)
+        );
+      }, []);
+
+      // rows
+      return [
+        // rider details
+        rider_number,
+        rider_name,
+        class_name,
+        // scores
+        ...filledSections,
+        null,
+        // total
+        filledSections.reduce((prev, cur) => prev + cur, 0),
+      ];
+    }
+  );
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const day = date.getDate();
+  const month = date.toLocaleString("default", { month: "short" });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
 router.get(
-  "/results_summary/:event_id/excel",
+  "/results_summary/:event_id/xlsx",
   async ({ params: { event_id } }, res) => {
-    const scores = await QUERIES.GET_SCORES_SUMMARY_BY_EVENTID(event_id);
+    const { id, event_date, location, name, lap_count, section_count } = (
+      await QUERIES.GET_SECTION_BY_EVENTID(event_id)
+    )[0];
+
+    const scoresRelational = await QUERIES.GET_SCORES_SUMMARY_BY_EVENTID_EXCEL(
+      event_id
+    );
+
+    const scores = relationalRowsToNested(
+      scoresRelational.rows,
+      lap_count,
+      section_count
+    );
+
+    const ROW_DIMS = (lap_count + 1) * section_count;
+
+    const sectionStrings = Array.from({ length: ROW_DIMS }, (_, i) => {
+      let condition = i % (lap_count + 1) === 0;
+      return condition ? "Section " + Math.floor(i / lap_count + 1) : "";
+    });
+
+    const lapStrings = Array.from({ length: ROW_DIMS }, (_, i) => {
+      const mod = (i % (lap_count + 1)) + 1;
+      return mod <= lap_count ? mod : "total";
+    });
 
     const worksheetData = [
-      ["Rider Number", "Rider Name", "Class Name", "Total Score"], // Headers
-      ...scores.map((row) => [
-        row.rider_number,
-        row.rider_name,
-        row.class_name,
-        row.total_score,
-      ]), // Data from SQL rows
+      ["Trial: ", name ? `${name} (id: ${id})` : id],
+      ["Date: ", formatDate(event_date)],
+      ["Location: ", location],
+      [],
+      ["", "", "", ...sectionStrings, "", "Total", "", "Tie Check"],
+      ["Rider Number", "Full Name", "Class", ...lapStrings, 0, 1, 2, 3, 5],
+      ...scores,
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -96,17 +169,15 @@ router.get(
       type: "buffer",
       bookType: "xlsx",
     });
-
-    // Set headers to indicate a file download and specify the content type
+    // // Set headers to indicate a file download and specify the content type
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=event_results_${event_id}.xlsx`
+      `attachment; filename=Results_${event_id}.xlsx`
     );
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-
     // Send the Excel file as a response
     res.send(excelBuffer);
   }

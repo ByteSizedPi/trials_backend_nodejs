@@ -213,25 +213,44 @@ const QUERIES = {
   `,
       [event_id]
     ),
+  GET_SECTION_BY_EVENTID: (event_id) =>
+    executeQuery(
+      `
+      SELECT *
+      FROM Events
+      WHERE id = ?;
+      `,
+      [event_id]
+    ),
+
   GET_SCORES_SUMMARY_BY_EVENTID_EXCEL: (event_id) =>
     executeQuery(
       `
-    SELECT s.rider_number, rider_name, c.name as class_name, SUM(score) as total_score
-    FROM Events e
-    JOIN Sections sec ON e.id = sec.event_id
-    JOIN Scores s ON e.id = s.event_id AND s.section_number = sec.section_number
-    JOIN Riders r ON e.id = r.event_id AND s.rider_number = r.rider_number
-    JOIN Classes c ON r.class_id = c.id
-    WHERE e.id = ?
-    GROUP BY rider_number, rider_name, class_name
-    ORDER BY
-    CASE class_name
-        WHEN 'M' THEN 1
-        WHEN 'E' THEN 2
-        WHEN 'I' THEN 3
-        WHEN 'C' THEN 4
-    END,
-    total_score ASC;
+        WITH score_arrays AS (
+          SELECT
+                R.rider_number,
+                R.rider_name,
+                R.class_id,
+                C.name AS class_name,
+                S.section_number,
+                CONCAT("[", GROUP_CONCAT(S.score ORDER BY S.lap_number), "]") AS scores
+            FROM Scores S
+            JOIN Riders R USING (event_id, rider_number)
+            JOIN Classes C ON R.class_id = C.id
+            WHERE S.event_id = ?
+            GROUP BY R.rider_number, S.section_number, R.rider_name, R.class_id, C.name
+            ORDER BY R.rider_number, S.section_number
+        )
+        SELECT
+          rider_number,
+          rider_name,
+            class_id,
+            class_name,
+            CONCAT(
+                '{ ', GROUP_CONCAT(CONCAT('"', section_number, '":', scores)), ' }'
+          ) AS JSON_scores
+        FROM score_arrays
+        GROUP BY rider_number, rider_name, class_id, class_name;
   `,
       [event_id],
       false
