@@ -129,9 +129,8 @@ router.get(
       await QUERIES.GET_SECTION_BY_EVENTID(event_id)
     )[0];
 
-    const scoresRelational = await QUERIES.GET_SCORES_SUMMARY_BY_EVENTID_EXCEL(
-      event_id
-    );
+    const scoresRelational =
+      await QUERIES.GET_SCORES_SUMMARY_BY_EVENTID_EXCEL(event_id);
 
     const scores = relationalRowsToNested(
       scoresRelational.rows,
@@ -218,6 +217,8 @@ router.put("/score", async (req, res) => {
 router.post("/event", async (req, res) => {
   const form = new multiparty.Form();
 
+  const fail = (error) => res.status(400).json({ error });
+
   form.parse(req, async (err, fields, files) => {
     // flatten fields values
     try {
@@ -225,11 +226,24 @@ router.post("/event", async (req, res) => {
         Object.entries(fields).map(([key, value]) => [key, value[0]])
       );
 
+      const {
+        event_name,
+        event_location,
+        event_date,
+        lap_count,
+        password,
+        sections: section_count,
+      } = newFields;
+
       // validate fields
-      if (isNaN(newFields.sections) || isNaN(newFields.lap_count))
-        res
-          .status(400)
-          .json({ error: "Sections and Lap Count must be an integer" });
+      if (
+        isNaN(section_count) ||
+        isNaN(lap_count) ||
+        section_count < 1 ||
+        lap_count < 1
+      ) {
+        fail("Sections and Lap Count must be an integer and larger than 1");
+      }
 
       // read riders file
       const workbook = XLSX.readFile(files.file[0].path);
@@ -241,7 +255,6 @@ router.post("/event", async (req, res) => {
       const firstEmptyRow = data.findIndex((row) => row.length === 0);
       const riders = data.slice(0, firstEmptyRow);
 
-      const fail = (error) => res.status(400).json({ error });
       const classes = ["M", "E", "I", "C"];
 
       // validate riders
@@ -263,19 +276,18 @@ router.post("/event", async (req, res) => {
       });
 
       // create event
-      const { event_name, event_location, event_date, lap_count, password } =
-        newFields;
 
       const event_id = await QUERIES.CREATE_EVENT(
         event_name || "Event",
         event_location ?? "",
         event_date,
+        section_count,
         lap_count,
         password || ""
       );
 
       // add sections
-      for (let i = 1; i <= newFields.sections; i++)
+      for (let i = 1; i <= section_count; i++)
         await QUERIES.CREATE_SECTION(event_id, i);
 
       // add riders

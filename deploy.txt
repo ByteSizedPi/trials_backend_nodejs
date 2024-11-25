@@ -1,0 +1,2 @@
+ssh trialsob@197.189.237.186 'rm -r /home/trialsob/trials_backend_nodejs'
+scp -r ./ trialsob@197.189.237.186:/home/trialsob/trials_backend_nodejs

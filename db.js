@@ -72,93 +72,80 @@ const QUERIES = {
   // Events
   ALL_EVENTS: () =>
     executeQuery(`
-    SELECT e.*, COUNT(s.section_number) AS section_count
-    FROM Events e
-    JOIN Sections s on e.id = s.event_id
-    GROUP BY e.id, e.date_created, e.name, e.event_date, e.location, e.lap_count, e.completed
-    ORDER BY e.event_date ASC;
-  `),
+      SELECT id, date_created, name, event_date, location, lap_count, section_count
+        FROM Events
+        WHERE deleted = 0
+        ORDER BY event_date ASC;
+    `),
+
   UPCOMING_EVENTS: () =>
     executeQuery(`
-    SELECT e.*, COUNT(s.section_number) AS section_count
-    FROM Events e
-    JOIN Sections s on e.id = s.event_id
-    WHERE completed = 0
-    GROUP BY e.id, e.date_created, e.name, e.event_date, e.location, e.lap_count, e.completed
-    ORDER BY e.event_date ASC;
-  `),
+      SELECT id, date_created, name, event_date, location, lap_count, section_count
+      FROM Events
+      WHERE completed = 0 AND deleted = 0
+      ORDER BY event_date ASC;
+    `),
+
   COMPLETED_EVENTS: () =>
     executeQuery(`
-    SELECT e.*, COUNT(s.section_number) AS section_count
-    FROM Events e
-    JOIN Sections s on e.id = s.event_id
-    WHERE completed = 1
-    GROUP BY e.id, e.date_created, e.name, e.event_date, e.location, e.lap_count, e.completed
-    ORDER BY e.event_date DESC;
-  `),
+      SELECT id, date_created, name, event_date, location, lap_count, section_count
+      FROM Events
+      WHERE completed = 1 AND deleted = 0
+      ORDER BY event_date DESC;
+    `),
+
   COMPLETE_EVENT: (event_id) =>
-    insertQuery(
-      `
-    UPDATE Events
-    SET completed = 1
-    WHERE id = ?;
-  `,
-      [event_id]
-    ),
+    insertQuery(`UPDATE Events SET completed = 1 WHERE id = ?;`, [event_id]),
+
   DELETE_EVENT: (event_id) =>
-    insertQuery(
-      `
-    DELETE FROM Events
-    WHERE id = ?;
-  `,
-      [event_id]
-    ),
+    insertQuery(`UPDATE Events SET deleted = 1 WHERE id = ?;`, [event_id]),
+
   EVENT: (event_id) =>
     executeQuery(
       `
-    SELECT id, name, event_date, location, lap_count
-    FROM Events
-    WHERE id = ?;
-  `,
+        SELECT id, name, event_date, location, lap_count
+        FROM Events
+        WHERE id = ?;
+      `,
       [event_id]
     ),
   // Sections
   ALL_SECTIONS: (event_id) =>
     executeQuery(
       `
-    SELECT section_number
-    FROM Sections
-    WHERE event_id = ?;
-  `,
+        SELECT section_number
+        FROM Sections
+        WHERE event_id = ?;
+      `,
       [event_id]
     ),
   // Riders
   ALL_RIDERS: (event_id) =>
     executeQuery(
       `
-    SELECT rider_number, rider_name, c.name AS class
-    FROM Riders r
-    JOIN Classes c ON r.class_id = c.id
-    WHERE event_id = ?
-    ORDER BY rider_number ASC;
-  `,
+      SELECT rider_number, rider_name, c.name AS class
+      FROM Riders r
+      JOIN Classes c ON r.class_id = c.id
+      WHERE event_id = ?
+      ORDER BY rider_number ASC;
+    `,
       [event_id]
     ),
   GET_SCORES: (event_id, section_number, rider_number) =>
     executeQuery(
       `
-    SELECT lap_number, score
-    FROM Scores
-    WHERE event_id = ? AND section_number = ? AND rider_number = ?;
-  `,
+        SELECT lap_number, score
+        FROM Scores
+        WHERE event_id = ? AND section_number = ? AND rider_number = ?;
+      `,
       [event_id, section_number, rider_number]
     ),
   POST_SCORE: (event_id, section_number, rider_number, lap_number, score) =>
     insertQuery(
       `
-    INSERT INTO Scores (event_id, section_number, rider_number, lap_number, score)
-    VALUES (?, ?, ?, ?, ?);
-  `,
+        INSERT INTO Scores (event_id, section_number, rider_number, lap_number, score)
+        VALUES (?, ?, ?, ?, ?);
+    `,
       [event_id, section_number, rider_number, lap_number, score]
     ),
   UPDATE_SCORE: (event_id, section_number, rider_number, lap_number, score) =>
@@ -170,13 +157,27 @@ const QUERIES = {
   `,
       [score, event_id, section_number, rider_number, lap_number]
     ),
-  CREATE_EVENT: (event_name, event_location, event_date, laps, password) =>
+  CREATE_EVENT: (
+    event_name,
+    event_location,
+    event_date,
+    section_count,
+    lap_count,
+    password
+  ) =>
     insertQuery(
       `
-    INSERT INTO Events (name, location, event_date, lap_count, password)
-    VALUES (?, ?, ?, ?, ?);
+    INSERT INTO Events (name, location, event_date, section_count, lap_count, password)
+    VALUES (?, ?, ?, ?, ?, ?);
   `,
-      [event_name, event_location, event_date, laps, password]
+      [
+        event_name,
+        event_location,
+        event_date,
+        section_count,
+        lap_count,
+        password,
+      ]
     ),
   CREATE_SECTION: (event_id, section_number) =>
     insertQuery(
@@ -194,22 +195,19 @@ const QUERIES = {
   GET_SCORES_SUMMARY_BY_EVENTID: (event_id) =>
     executeQuery(
       `
-    SELECT s.rider_number, rider_name, c.name as class_name, SUM(score) as total_score
-    FROM Events e
-    JOIN Sections sec ON e.id = sec.event_id
-    JOIN Scores s ON e.id = s.event_id AND s.section_number = sec.section_number
-    JOIN Riders r ON e.id = r.event_id AND s.rider_number = r.rider_number
-    JOIN Classes c ON r.class_id = c.id
-    WHERE e.id = ?
-    GROUP BY rider_number, rider_name, class_name
-    ORDER BY
-    CASE class_name
-        WHEN 'M' THEN 1
-        WHEN 'E' THEN 2
-        WHEN 'I' THEN 3
-        WHEN 'C' THEN 4
-    END,
-    total_score ASC;
+        SELECT 
+          s.rider_number,
+            rider_name,
+            c.name as class_name,
+            SUM(score) as total_score
+        FROM Events e
+        JOIN Sections sec ON e.id = sec.event_id
+        JOIN Scores s ON e.id = s.event_id AND s.section_number = sec.section_number
+        JOIN Riders r ON e.id = r.event_id AND s.rider_number = r.rider_number
+        JOIN Classes c ON r.class_id = c.id
+        WHERE e.id = 57
+        GROUP BY rider_number, rider_name, class_name
+        ORDER BY c.id, total_score ASC;
   `,
       [event_id]
     ),
