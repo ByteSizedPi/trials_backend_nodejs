@@ -205,7 +205,7 @@ const QUERIES = {
         JOIN Scores s ON e.id = s.event_id AND s.section_number = sec.section_number
         JOIN Riders r ON e.id = r.event_id AND s.rider_number = r.rider_number
         JOIN Classes c ON r.class_id = c.id
-        WHERE e.id = 57
+        WHERE e.id = ?
         GROUP BY rider_number, rider_name, class_name
         ORDER BY c.id, total_score ASC;
   `,
